@@ -1,4 +1,4 @@
-##Elevate cmd.exe
+## Elevate cmd.exe
 simple batch script that replaces the current cmd window with an equivalent Administrator cmd window by way of calling into Powershell. The original cmd window is destroyed, and the new Administrator cmd window is opened in the same location with the same environment variables.
 
 **Usage be like**
