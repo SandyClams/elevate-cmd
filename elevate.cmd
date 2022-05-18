@@ -1,16 +1,38 @@
-@echo off
+@ECHO off
 
 :[Initialize]
-  :: change cmd window title to identify it later by its title
-  TITLE Opening Administrator Prompt...
-  :: create random name for our temp file to avoid filename clashing
-  SET "_RESTORE NAME_=elevate_restore_%RANDOM%%RANDOM%.cmd"
-  SET "_RESTORE FILE_=%~dp0%_RESTORE NAME_%"
-  :: initialize temp file with echo off
-  > "%_RESTORE FILE_%" ECHO @ECHO off
+  :: create random id for our temp files to avoid filename clashing
+  SET "_ELEVATE ID_=%RANDOM%%RANDOM%"
+  SET "_TEMP RESTORE FILE_=%~dp0elevate_restore_%_ELEVATE ID_%.cmd"
+  SET "_TEMP PID FILE_=%~dp0elevate_pid_%_ELEVATE ID_%.txt"
+  :: initialize restore file with echo off
+  > "%_TEMP RESTORE FILE_%" ECHO @ECHO off
   :: for keeping track of POPD iterations
   SET "_PREVIOUS DIRECTORY_=%CD%"
   SET "_COUNT_=0"
+
+:[ProcessWindowTitle]
+  SETLOCAL EnableDelayedExpansion
+  :: we have to call into WMIC outside our FOR loop to return an accurate process ID
+  WMIC PROCESS WHERE NAME^="WMIC.EXE" GET PARENTPROCESSID /value > "%_TEMP PID FILE_%"
+  :: then loop a single time over the temp file output to isolate our cmd window PID
+  FOR /f "Tokens=2 Delims==" %%R IN ('FIND "ParentProcess" "%_TEMP PID FILE_%"') DO (
+    DEL "%_TEMP PID FILE_%"
+    SET "_THIS PROCESS ID_=%%R"
+    :: loop again over the verbose printed attributes of the task having our matching PID
+    FOR /f "Tokens=*" %%L IN ('TASKLIST /fi "PID eq !_THIS PROCESS ID_!" /fo LIST /v') DO (
+      SET "_CURRENT ATTRIBUTE_=%%L"
+      :: if we have a window title attribute,
+      if "!_CURRENT ATTRIBUTE_:~0,12!"=="Window Title" (
+        :: finally store the title of our cmd window
+        SET "_TEMP RESTORE TITLE_=!_CURRENT ATTRIBUTE_:~14!"
+      )
+    )
+  )
+  :: get the title to the global scope
+  ENDLOCAL & SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_%"
+  :: now change cmd window title, not to identify it later, but to provide user feedback
+  TITLE Opening Administrator Prompt...
 
 :[PopCurrentStackItem]
   POPD
@@ -48,13 +70,14 @@
   :: compose command to start at first item on stack and push each subsequent item
   SET "_CREATE STACK COMMAND_=CD /d ^"%_CURRENT DIRECTORY_%^"%_RECREATED STACK_%"
   :: append command to the next line of our restore file
-  >> "%_RESTORE FILE_%" ECHO %_CREATE STACK COMMAND_%
+  >> "%_TEMP RESTORE FILE_%" ECHO %_CREATE STACK COMMAND_%
   :: append a command to quit restore file early, we will use this on window cancel
-  >> "%_RESTORE FILE_%" ECHO IF "%%~1"=="earlyquit" EXIT /b
+  >> "%_TEMP RESTORE FILE_%" ECHO IF "%%~1"=="earlyquit" EXIT /b
 
 :[ProcessVariables]
   :: first we need these suckers gone
-  SET "_RESTORE NAME_="
+  SET "_ELEVATE ID_="
+  SET "_TEMP PID FILE_="
   SET "_PREVIOUS DIRECTORY_="
   SET "_COUNT_="
   SET "_CURRENT DIRECTORY_="
@@ -66,23 +89,29 @@
   FOR /f "Tokens=*" %%V IN ('SET') DO (
     :: store the variable display in order to extract substring
     SET "_CURRENT LINE_=%%~V"
-    :: if the current line isn't our own local variable,
-    IF NOT "!_CURRENT LINE_:~1,12!"=="RESTORE FILE" (
+    :: if the current line isn't one of our own local variables,
+    IF NOT "!_CURRENT LINE_:~1,12!"=="TEMP RESTORE" (
       :: compose new SET command that will redefine the variable
       SET "_RESTORE VARIABLE COMMAND_=SET "%%~V^""
       :: append command to the next line of our restore file
-      >> "%_RESTORE FILE_%" ECHO !_RESTORE VARIABLE COMMAND_!
+      >> "%_TEMP RESTORE FILE_%" ECHO !_RESTORE VARIABLE COMMAND_!
     )
   )
   ENDLOCAL
 
 :[LaunchAdministratorWindow]
   :: run Powershell command to launch Administrator cmd, kill old cmd, restore state, delete temp file
-  Powershell.exe -Command "& {Start-Process cmd.exe -Verb RunAs -ArgumentList '/k ^"TASKKILL /f /im cmd.exe /fi \^"WINDOWTITLE eq Opening Administrator Prompt*\^" ^& \^"%_RESTORE FILE_%\^" ^& DEL \^"%_RESTORE FILE_%\^" ^& cls^"'} 2>NUL"
-  :: silently pause for one second after command completes, giving original window time to close
+  Powershell.exe -Command "& {Start-Process cmd.exe -Verb RunAs -ArgumentList '/k ^"TASKKILL /f /im cmd.exe /fi \^"WINDOWTITLE eq Opening Administrator Prompt*\^" ^& \^"%_TEMP RESTORE FILE_%\^" ^& DEL \^"%_TEMP RESTORE FILE_%\^" ^& cls^"'} 2>NUL"
+  :: silently pause for one second after command executes, giving original window time to close
   TIMEOUT /t 1 /nobreak >NUL
 
 :[OnWindowCancel]
-  :: else recreate original stack from our restore file and clean up
-  "%_RESTORE FILE_%" earlyquit & DEL "%_RESTORE FILE_%" & SET "_RESTORE FILE_="
+  :: else recreate original stack from our restore file
+  "%_TEMP RESTORE FILE_%" earlyquit & (
+    :: and clean up
+    TITLE %_TEMP RESTORE TITLE_%
+    DEL "%_TEMP RESTORE FILE_%"
+    SET "_TEMP RESTORE TITLE_="
+    SET "_TEMP RESTORE FILE_="
+  )
 
