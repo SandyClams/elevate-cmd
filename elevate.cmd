@@ -17,7 +17,6 @@
   WMIC PROCESS WHERE NAME^="WMIC.EXE" GET PARENTPROCESSID /value > "%_TEMP PID FILE_%"
   :: then loop a single time over the temp file output to isolate our cmd window PID
   FOR /f "Tokens=2 Delims==" %%R IN ('FIND "ParentProcess" "%_TEMP PID FILE_%"') DO (
-    DEL "%_TEMP PID FILE_%"
     SET "_THIS PROCESS ID_=%%R"
     :: loop again over the verbose printed attributes of the task having our matching PID
     FOR /f "Tokens=*" %%L IN ('TASKLIST /fi "PID eq !_THIS PROCESS ID_!" /fo LIST /v') DO (
@@ -25,12 +24,12 @@
       :: if we have a window title attribute,
       if "!_CURRENT ATTRIBUTE_:~0,12!"=="Window Title" (
         :: finally store the title of our cmd window
-        SET "_TEMP RESTORE TITLE_=!_CURRENT ATTRIBUTE_:~14!"
+        SET "_THIS WINDOW TITLE_=!_CURRENT ATTRIBUTE_:~14!"
       )
     )
   )
-  :: get the title to the global scope
-  ENDLOCAL & SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_%"
+  :: delete temp file, get the title to the global scope
+  ENDLOCAL & DEL "%_TEMP PID FILE_%" & SET "_TEMP RESTORE TITLE_=%_THIS WINDOW TITLE_%"
   :: now change cmd window title, not to identify it later, but to provide user feedback
   TITLE Opening Administrator Prompt...
 
@@ -72,7 +71,7 @@
   :: append command to the next line of our restore file
   >> "%_TEMP RESTORE FILE_%" ECHO %_CREATE STACK COMMAND_%
   :: append a command to quit restore file early, we will use this on window cancel
-  >> "%_TEMP RESTORE FILE_%" ECHO IF "%%~1"=="earlyquit" EXIT /b
+  >> "%_TEMP RESTORE FILE_%" ECHO IF "%%~1"=="stackonly" EXIT /b
 
 :[ProcessVariables]
   :: first we need these suckers gone
@@ -107,11 +106,11 @@
 
 :[OnWindowCancel]
   :: else recreate original stack from our restore file
-  "%_TEMP RESTORE FILE_%" earlyquit & (
+  "%_TEMP RESTORE FILE_%" stackonly & (
     :: and clean up
     TITLE %_TEMP RESTORE TITLE_%
-    DEL "%_TEMP RESTORE FILE_%"
     SET "_TEMP RESTORE TITLE_="
+    DEL "%_TEMP RESTORE FILE_%"
     SET "_TEMP RESTORE FILE_="
   )
 
