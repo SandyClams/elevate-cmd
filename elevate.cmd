@@ -3,8 +3,8 @@
 :[Initialize]
   :: create random id for our temp files to avoid filename clashing
   SET "_ELEVATE ID_=%RANDOM%%RANDOM%"
-  SET "_TEMP RESTORE FILE_=%~dp0elevate_restore_%_ELEVATE ID_%.cmd"
-  SET "_TEMP PID FILE_=%~dp0elevate_pid_%_ELEVATE ID_%.txt"
+  SET "_TEMP RESTORE FILE_=%TEMP%\elevate_restore_%_ELEVATE ID_%.cmd"
+  SET "_TEMP PID FILE_=%TEMP%\elevate_pid_%_ELEVATE ID_%.txt"
   :: initialize restore file with echo off
   > "%_TEMP RESTORE FILE_%" ECHO @ECHO off
   :: for keeping track of POPD iterations
