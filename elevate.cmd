@@ -98,11 +98,6 @@
   )
   ENDLOCAL
 
-:[RevertPreviousTitle]
-  :: remove the elevate command string from the title of the original window on elevate cancel
-  IF /i "%_TEMP RESTORE TITLE_:~-10%"==" - elevate" SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_:~0,-10%"
-  IF /i "%_TEMP RESTORE TITLE_:~-14%"==" - elevate.cmd" SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_:~0,-14%"
-
 :[LaunchAdministratorWindow]
   :: run Powershell command to launch Administrator cmd, kill old cmd, restore state, delete temp file
   Powershell.exe -Command "& {Start-Process cmd.exe -Verb RunAs -ArgumentList '/k ^"TASKKILL /f /im cmd.exe /fi \^"WINDOWTITLE eq Opening Administrator Prompt*\^" ^& \^"%_TEMP RESTORE FILE_%\^" ^& DEL \^"%_TEMP RESTORE FILE_%\^" ^& cls^"'} 2>NUL"
@@ -110,7 +105,10 @@
   TIMEOUT /t 1 /nobreak >NUL
 
 :[OnWindowCancel]
-  :: else recreate original stack from our restore file
+  :: remove the elevate command string from the title of the original window
+  IF /i "%_TEMP RESTORE TITLE_:~-10%"==" - elevate" SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_:~0,-10%"
+  IF /i "%_TEMP RESTORE TITLE_:~-14%"==" - elevate.cmd" SET "_TEMP RESTORE TITLE_=%_TEMP RESTORE TITLE_:~0,-14%"
+  :: recreate original stack from our restore file
   "%_TEMP RESTORE FILE_%" stackonly & (
     :: and clean up
     TITLE %_TEMP RESTORE TITLE_%
